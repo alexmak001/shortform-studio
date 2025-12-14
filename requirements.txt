@@ -8,3 +8,4 @@ TTS
 soundfile
 python-dotenv
 openai
+elevenlabs

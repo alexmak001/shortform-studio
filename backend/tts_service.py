@@ -1,41 +1,43 @@
-"""Text-to-speech via the Hugging Face Inference API."""
+"""Text-to-speech via the ElevenLabs API."""
 
 from __future__ import annotations
 
 from io import BytesIO
 import os
+from typing import Iterable
 
 from dotenv import load_dotenv
-from huggingface_hub import InferenceClient
+from elevenlabs import ElevenLabs
 
 
 load_dotenv()
 
-_HF_TOKEN = os.getenv("HUGGINGFACE_HUB_TOKEN")
-if not _HF_TOKEN:
-    raise RuntimeError("Missing HUGGINGFACE_HUB_TOKEN in environment/.env file.")
+_API_KEY = os.getenv("ELEVENLABS_API_KEY")
+if not _API_KEY:
+    raise RuntimeError("Missing ELEVENLABS_API_KEY in environment/.env file.")
 
-_MODEL_NAME = os.getenv("TTS_MODEL_NAME", "parler-tts/parler-tts-mini-v1")
-_DEFAULT_SPEAKER = os.getenv("TTS_SPEAKER")
-_DEFAULT_LANGUAGE = os.getenv("TTS_LANGUAGE")
+_DEFAULT_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "fQfFscOlHYWduZPLp3YY")
+_MODEL_ID = os.getenv("ELEVENLABS_MODEL_ID", "eleven_multilingual_v2")
+_OUTPUT_FORMAT = os.getenv("ELEVENLABS_OUTPUT_FORMAT", "mp3_44100_128")
 
-_client = InferenceClient(token=_HF_TOKEN)
+_client = ElevenLabs(api_key=_API_KEY)
 
 
-def _build_generation_kwargs(speaker: str | None, language: str | None) -> dict[str, str]:
-    """Translate generic speaker/language hints to the HF API kwargs."""
-    generation_kwargs: dict[str, str] = {}
-    if speaker:
-        generation_kwargs["voice"] = speaker
-    elif _DEFAULT_SPEAKER:
-        generation_kwargs["voice"] = _DEFAULT_SPEAKER
+def _resolve_voice_id(voice: str | None) -> str:
+    voice_id = voice or _DEFAULT_VOICE_ID
+    if not voice_id:
+        raise RuntimeError(
+            "No ElevenLabs voice configured. Pass speaker argument or set ELEVENLABS_VOICE_ID."
+        )
+    return voice_id
 
-    if language:
-        generation_kwargs["language"] = language
-    elif _DEFAULT_LANGUAGE:
-        generation_kwargs["language"] = _DEFAULT_LANGUAGE
 
-    return generation_kwargs
+def _accumulate_audio(chunks: Iterable[bytes]) -> BytesIO:
+    buffer = BytesIO()
+    for chunk in chunks:
+        buffer.write(chunk)
+    buffer.seek(0)
+    return buffer
 
 
 def speak_text(
@@ -44,13 +46,20 @@ def speak_text(
     speaker: str | None = None,
     language: str | None = None,
 ) -> BytesIO:
-    """Generate speech audio using Hugging Face-hosted models."""
+    """Generate speech audio using ElevenLabs voices."""
     if speaker_wav:
-        raise NotImplementedError("Voice cloning via speaker_wav is not supported with the HF Inference API.")
+        raise NotImplementedError("Voice cloning via speaker_wav is not supported with the ElevenLabs API.")
 
-    generation_kwargs = _build_generation_kwargs(speaker, language)
-    audio_bytes = _client.text_to_speech(text=text, model=_MODEL_NAME, **generation_kwargs)
+    voice_id = _resolve_voice_id(speaker)
+    try:
+        audio_chunks = _client.text_to_speech.convert(
+            voice_id=voice_id,
+            model_id=_MODEL_ID,
+            text=text,
+            output_format=_OUTPUT_FORMAT,
+            optimize_streaming_latency="0",
+        )
+    except Exception as exc:  # pragma: no cover - depends on external API
+        raise RuntimeError(f"ElevenLabs text-to-speech failed: {exc}") from exc
 
-    buffer = BytesIO(audio_bytes)
-    buffer.seek(0)
-    return buffer
+    return _accumulate_audio(audio_chunks)

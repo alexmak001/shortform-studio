@@ -4,22 +4,21 @@ import os
 from dotenv import load_dotenv
 from openai import OpenAI, OpenAIError
 
-
 load_dotenv()
 
 _OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not _OPENAI_API_KEY:
     raise RuntimeError("Missing OPENAI_API_KEY in environment/.env file.")
 
-_MODEL_NAME = os.getenv("OPENAI_MODEL", "gpt-5-nano")
+_MODEL_NAME = os.getenv("OPENAI_MODEL", "gpt-5-mini")
 _client = OpenAI(api_key=_OPENAI_API_KEY)
 
 
 def _call_openai(prompt: str) -> str:
     try:
-        response = _client.responses.create(
+        response = _client.chat.completions.create(
             model=_MODEL_NAME,
-            input=[
+            messages=[
                 {
                     "role": "system",
                     "content": (
@@ -29,14 +28,18 @@ def _call_openai(prompt: str) -> str:
                 },
                 {"role": "user", "content": prompt},
             ],
-            max_output_tokens=220
+            max_completion_tokens=500,
         )
     except OpenAIError as exc:  # pragma: no cover - depends on API availability
         raise RuntimeError(f"OpenAI API call failed: {exc}") from exc
 
-    content = response.output[0].content[0].text if response.output else ""
+    if not response.choices:
+        raise RuntimeError("OpenAI API returned an empty response.")
+
+    content = response.choices[0].message.content
     if not content:
         raise RuntimeError("OpenAI API returned an empty response.")
+
     return content.strip()
 
 
