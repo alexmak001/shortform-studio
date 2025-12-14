@@ -9,3 +9,4 @@ soundfile
 python-dotenv
 openai
 elevenlabs
+pydub
