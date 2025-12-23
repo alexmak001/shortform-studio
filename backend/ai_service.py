@@ -82,13 +82,13 @@ def _dialogue_messages(topic: str) -> List[Dict[str, str]]:
     instructions = (
         "You are orchestrating a duo teaching skit. Answer immediately with the final "
         "lines—no step-by-step reasoning. "
-        "Produce EXACTLY three dialogue turns in JSON for JOHN, CARTOON_DAD, then JOHN. "
+        "Produce EXACTLY three dialogue turns in JSON for CARTOON_DAD, JOHN, then CARTOON_DAD. "
         "Total word count across lines should stay near 120 words. "
-        "JOHN speaks with clipped, city-tough energy and asks pointed questions. "
-        "CARTOON_DAD delivers humorous yet accurate explanations and must include one concrete example. "
-        "The final JOHN line is a clarifying statement breadking down what CARTOON_DAD said. "
+        "CARTOON_DAD asks a funny question related to the topic and includes a specific example request. "
+        "JOHN responds with calm, reassuring clarity, explains the topic, and ties it directly to the specific example CARTOON_DAD asked for. "
+        "The final CARTOON_DAD line quickly summarizes the takeaway and thanks John. "
         "Respond ONLY with valid JSON shaped like "
-        '{"dialogue":[{"speaker":"JOHN","line":"..."}]}'
+        '{"dialogue":[{"speaker":"CARTOON_DAD","line":"..."}]}'
     )
     user_prompt = (
         f"Topic: {topic}. Keep the dialogue approachable and helpful while honoring the persona rules."
@@ -109,7 +109,7 @@ def _parse_dialogue_payload(payload: str) -> List[Dict[str, str]]:
     if not isinstance(dialogue, list):
         raise ValueError("Dialogue payload missing 'dialogue' list.")
 
-    expected_order = ["JOHN", "CARTOON_DAD", "JOHN"]
+    expected_order = ["CARTOON_DAD", "JOHN", "CARTOON_DAD"]
     if len(dialogue) != len(expected_order):
         raise ValueError("Dialogue must contain exactly three turns.")
 
@@ -143,7 +143,7 @@ def generate_dialogue(topic: str, logger: Optional[logging.Logger] = None) -> Li
                     "role": "system",
                     "content": (
                         "Reminder: The reply MUST be valid JSON matching "
-                        '{"dialogue":[{"speaker":"JOHN","line":"..."}]}. '
+                        '{"dialogue":[{"speaker":"CARTOON_DAD","line":"..."},{"speaker":"JOHN","line":"..."},{"speaker":"CARTOON_DAD","line":"..."}]}. '
                         "Do not add commentary."
                     ),
                 }
