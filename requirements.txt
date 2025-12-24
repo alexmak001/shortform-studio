@@ -10,3 +10,4 @@ python-dotenv
 openai
 elevenlabs
 pydub
+moviepy==2.2.1

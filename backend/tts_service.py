@@ -99,3 +99,11 @@ def stitch_mp3_chunks(
     buffer = BytesIO()
     combined.export(buffer, format="mp3")
     return buffer.getvalue()
+
+
+def mp3_duration_seconds(mp3_bytes: bytes) -> float:
+    """Return duration in seconds for an mp3 payload."""
+    if not mp3_bytes:
+        raise ValueError("mp3_bytes must be non-empty.")
+    segment = AudioSegment.from_file(BytesIO(mp3_bytes), format="mp3")
+    return float(segment.duration_seconds)
