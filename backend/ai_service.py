@@ -14,7 +14,7 @@ _OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not _OPENAI_API_KEY:
     raise RuntimeError("Missing OPENAI_API_KEY in environment/.env file.")
 
-_MODEL_NAME = os.getenv("OPENAI_MODEL", "gpt-5-nano-2025-08-07")
+_MODEL_NAME = os.getenv("OPENAI_MODEL", "gpt-5-mini-2025-08-07")
 _client = OpenAI(api_key=_OPENAI_API_KEY)
 _logger = logging.getLogger(__name__)
 
@@ -80,15 +80,40 @@ def generate_topic_explanation(topic: str) -> str:
 
 def _dialogue_messages(topic: str) -> List[Dict[str, str]]:
     instructions = (
-        "You are orchestrating a duo teaching skit. Answer immediately with the final "
-        "lines—no step-by-step reasoning. "
-        "Produce EXACTLY three dialogue turns in JSON for CARTOON_DAD, JOHN, then CARTOON_DAD. "
-        "Total word count across lines should stay near 120 words. "
-        "CARTOON_DAD asks a funny question related to the topic and includes a specific example request. "
-        "JOHN responds with calm, reassuring clarity, explains the topic, and ties it directly to the specific example CARTOON_DAD asked for. "
-        "The final CARTOON_DAD line quickly summarizes the takeaway and thanks John. "
-        "Respond ONLY with valid JSON shaped like "
-        '{"dialogue":[{"speaker":"CARTOON_DAD","line":"..."}]}'
+        "You are writing a short duo teaching skit. Output FINAL LINES ONLY (no reasoning).\n"
+        "\n"
+        "OUTPUT FORMAT (STRICT): Return ONLY valid JSON with this exact shape:\n"
+        '{"dialogue":[{"speaker":"CARTOON_DAD","line":"..."},{"speaker":"JOHN","line":"..."},{"speaker":"CARTOON_DAD","line":"..."}]}\n'
+        "\n"
+        "HARD CONSTRAINTS:\n"
+        "- Exactly 3 turns in this exact order: CARTOON_DAD, JOHN, CARTOON_DAD.\n"
+        "- Total length across all lines: 105–135 words.\n"
+        "- CARTOON_DAD line 1: 35–55 words.\n"
+        "- JOHN line 2: 95 words.\n"
+        "- CARTOON_DAD line 3: 15–25 words.\n"
+        "- No extra keys. No markdown. No commentary.\n"
+        "\n"
+        "CHARACTER RULES:\n"
+        "CARTOON_DAD:\n"
+        "- Goofy cartoon dad energy: casual, punchy humor, slightly overconfident.\n"
+        "- Must include ONE common misconception about the topic (something people often get wrong).\n"
+        "- Must ask a funny question AND request a concrete example in a specific scenario.\n"
+        "- Keep it approachable; no offensive content.\n"
+        "\n"
+        "JOHN:\n"
+        "- Warm, reassuring narrator voice: calm, patient, clear diction, gentle authority.\n"
+        "- First: correct the misconception kindly.\n"
+        "- Then: explain the topic simply.\n"
+        "- Then: answer using the exact scenario CARTOON_DAD requested (include 1 concrete mini-example).\n"
+        "\n"
+        "CARTOON_DAD (final):\n"
+        "- Very quick recap of the main takeaway + thanks John.\n"
+        "- No new info, no new questions.\n"
+        "\n"
+        "QUALITY:\n"
+        "- Make the misconception believable.\n"
+        "- Make the example specific (numbers/objects/conditions), not abstract.\n"
+        "- Avoid long lists; keep the pace snappy.\n"
     )
     user_prompt = (
         f"Topic: {topic}. Keep the dialogue approachable and helpful while honoring the persona rules."

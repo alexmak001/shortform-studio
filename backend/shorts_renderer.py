@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import random
 import re
 
 import numpy as np
@@ -62,6 +63,12 @@ def five_word_caption_clips(
             font=font or "Arial",
             font_size=font_size,
             stroke_width=stroke_width,
+        )
+        caption = with_bounce_in(
+            caption,
+            bounce_from=0.95,
+            bounce_to=1.0,
+            bounce_sec=0.08,
         )
         clips.append(caption)
     return clips
@@ -215,21 +222,81 @@ def make_safe_caption_clip(
     if safe_y != desired_y:
         print(f"Caption y adjusted {desired_y} -> {safe_y}")
 
-    centered_x = int((W - img.width) / 2)
-    min_x = margin_px
-    max_x = max(margin_px, W - img.width - margin_px)
-    safe_x = max(min_x, min(centered_x, max_x))
-
     clip = ImageClip(np.array(img))
     clip = clip.with_start(start).with_duration(duration)
-    clip = clip.with_position((safe_x, safe_y))
+    clip = clip.with_position(("center", safe_y))
     return clip
+
+
+def with_bounce_in(
+    clip,
+    *,
+    bounce_from: float = 0.95,
+    bounce_to: float = 1.0,
+    bounce_sec: float = 0.08,
+):
+    duration = clip.duration or 0
+    if duration <= 0:
+        return clip
+    bounce_sec = min(bounce_sec, duration)
+    if bounce_sec <= 0:
+        return clip
+
+    def scale_at(t: float) -> float:
+        if t <= 0:
+            return bounce_from
+        if t <= bounce_sec:
+            return bounce_from + (bounce_to - bounce_from) * (t / bounce_sec)
+        return bounce_to
+
+    return clip.resized(lambda t: scale_at(t))
+
+
+def with_character_transition(
+    img_clip,
+    *,
+    final_pos: tuple[int, int],
+    side: str,
+    transition: str = "slide",
+    trans_sec: float = 0.12,
+    slide_px: int = 120,
+):
+    duration = img_clip.duration or 0
+    if duration <= 0:
+        return img_clip.with_position(final_pos)
+    trans_sec = min(trans_sec, duration)
+    if trans_sec <= 0:
+        return img_clip.with_position(final_pos)
+
+    final_x, final_y = final_pos
+    if transition == "fade":
+        def opacity_at(t: float) -> float:
+            if t <= 0:
+                return 0.0
+            if t <= trans_sec:
+                return t / trans_sec
+            return 1.0
+
+        return img_clip.with_opacity(lambda t: opacity_at(t)).with_position(final_pos)
+
+    offset = -slide_px if side == "left" else slide_px
+
+    def pos_at(t: float) -> tuple[float, float]:
+        if t <= 0:
+            return (final_x + offset, final_y)
+        if t <= trans_sec:
+            x = final_x + offset * (1 - (t / trans_sec))
+            return (x, final_y)
+        return (final_x, final_y)
+
+    return img_clip.with_position(lambda t: pos_at(t))
 
 
 def render_shorts_video(
     timed_dialogue: list[dict[str, object]],
     audio_path: str = "temp/duo_audio.mp3",
     output_path: str = "temp/output_short.mp4",
+    bg_video_path: str = "temp/brainRotVideos/default.mp4",
 ) -> str:
     from moviepy import (
         AudioFileClip,
@@ -239,7 +306,6 @@ def render_shorts_video(
         vfx,
     )
 
-    bg_path = os.path.join("temp", "Subway Surfers brainrot.mp4")
     john_path = os.path.join("temp", "john_character_cutout.png")
     dad_path = os.path.join("temp", "cartoon_dad_transparent.png")
 
@@ -247,10 +313,13 @@ def render_shorts_video(
     audio_clip = AudioFileClip(audio_path)
     audio_duration = audio_clip.duration
 
-    background = VideoFileClip(bg_path)
-    if background.duration < audio_duration:
+    background = VideoFileClip(bg_video_path)
+    if background.duration <= audio_duration:
         background = background.with_effects([vfx.Loop(duration=audio_duration)])
-    background = background.subclipped(0, audio_duration)
+        start_t = 0.0
+    else:
+        start_t = random.uniform(0, background.duration - audio_duration)
+    background = background.subclipped(start_t, start_t + audio_duration)
     scale = max(width / background.w, height / background.h)
     background = background.resized(scale)
     background = background.cropped(
@@ -268,29 +337,37 @@ def render_shorts_video(
         line_duration = float(entry["duration"])
         img_path = john_path if speaker == "JOHN" else dad_path
 
-        img_clip = ImageClip(img_path).resized(width=int(width * 0.4))
+        img_clip = ImageClip(img_path).resized(width=int(width * 0.5))
         img_clip = img_clip.with_start(start).with_duration(line_duration)
         img_y = height - img_clip.h - int(height * 0.05)
         if speaker == "CARTOON_DAD":
             img_x = int(width * 0.25) - int(img_clip.w / 2)
+            side = "left"
         else:
             img_x = int(width * 0.75) - int(img_clip.w / 2)
-        img_clip = img_clip.with_position((img_x, img_y))
+            side = "right"
+        img_clip = with_character_transition(
+            img_clip,
+            final_pos=(img_x, img_y),
+            side=side,
+            transition="slide",
+            trans_sec=0.12,
+        )
 
         text_y = max(int(height * 0.05), img_y - int(height * 0.40))
         caption_clips = five_word_caption_clips(
-        text,
-        start,
-        line_duration,
-        width,
-        height,
-        speaker=speaker,
-        words_per_chunk=5,
-        font_size=72,
-        font="Menlo",
-        y_pos=text_y,
-        stroke_width=6,
-    )
+            text,
+            start,
+            line_duration,
+            width,
+            height,
+            speaker=speaker,
+            words_per_chunk=5,
+            font_size=72,
+            font="Menlo",
+            y_pos=text_y,
+            stroke_width=6,
+        )
 
         overlays.append(img_clip)
         overlays.extend(caption_clips)

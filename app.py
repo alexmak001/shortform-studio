@@ -32,17 +32,18 @@ def _setup_logger(base_dir: str) -> Tuple[logging.Logger, str]:
     return logger, log_path
 
 
-st.title("🎭 Shorts Generator for Topics")
+st.title("⚡ ShortForm Studio")
 
 temp_dir = "logs"
 temp_media_dir = "temp"
+brainrot_dir = os.path.join(temp_media_dir, "brainRotVideos")
 audio_path = os.path.join(temp_dir, "recorded_audio.wav")
 pause_between_lines_ms = 250
 logger, log_path = _setup_logger(temp_dir)
 os.makedirs(temp_media_dir, exist_ok=True)
 
-st.caption("Record a question and let JOHN and CARTOON_DAD bring the lesson to life.")
-st.caption(f"Session logs saved to `{log_path}`")
+st.caption("Use your voice to describe a topic you want to learn (or a question you’re stuck on). Then JOHN and CARTOON_DAD turn it into a quick, entertaining back-and-forth explanation—complete with brainrot gameplay in the background, captions on screen, and a Shorts-ready video output.")
+# st.caption(f"Session logs saved to `{log_path}`")
 
 # audio = st.audio_input("Upload or record your voice (topic request)")
 
@@ -148,17 +149,41 @@ if True:
     ''')
     st.session_state["duo_audio_path"] = "temp/duo_audio.mp3"
 
+    brainrot_files = []
+    if os.path.isdir(brainrot_dir):
+        brainrot_files = sorted(
+            [
+                f
+                for f in os.listdir(brainrot_dir)
+                if f.lower().endswith(".mp4")
+            ]
+        )
+    if not brainrot_files:
+        st.error("No brainrot videos found in temp/brainRotVideos/.")
+        selected_brainrot = None
+    else:
+        selected_brainrot = st.selectbox(
+            "Choose a brainrot background video",
+            brainrot_files,
+            index=0,
+        )
+        st.caption(f"Selected background: {selected_brainrot}")
+
     if st.button("Render Shorts Video"):
         if "timed_dialogue" not in st.session_state or "duo_audio_path" not in st.session_state:
             st.error("Missing audio or timing data. Please run Duo Mode first.")
+        elif not selected_brainrot:
+            st.error("Please add a background video to temp/brainRotVideos/ first.")
         else:
             with st.status("Rendering Shorts video...", expanded=True) as status:
                 output_path = os.path.join(temp_media_dir, "output_short.mp4")
                 status.write("Compositing video and captions...")
+                bg_video_path = os.path.join(brainrot_dir, selected_brainrot)
                 render_shorts_video(
                     st.session_state["timed_dialogue"],
                     audio_path=st.session_state["duo_audio_path"],
                     output_path=output_path,
+                    bg_video_path=bg_video_path,
                 )
                 status.update(label="Shorts video ready!", state="complete")
             st.video(output_path)
